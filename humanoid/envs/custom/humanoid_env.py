@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -97,7 +97,7 @@ class XBotLFreeEnv(LeggedRobot):
         self.gym.set_actor_root_state_tensor(
             self.sim, gymtorch.unwrap_tensor(self.root_states))
 
-    def  _get_phase(self):
+    def _get_phase(self):
         cycle_time = self.cfg.rewards.cycle_time
         phase = self.episode_length_buf * self.dt / cycle_time
         return phase
@@ -116,7 +116,6 @@ class XBotLFreeEnv(LeggedRobot):
         stance_mask[torch.abs(sin_pos) < 0.1] = 1
 
         return stance_mask
-    
 
     def compute_ref_state(self):
         phase = self._get_phase()
@@ -141,7 +140,6 @@ class XBotLFreeEnv(LeggedRobot):
 
         self.ref_action = 2 * self.ref_dof_pos
 
-
     def create_sim(self):
         """ Creates simulation, terrain and evironments
         """
@@ -161,7 +159,6 @@ class XBotLFreeEnv(LeggedRobot):
             raise ValueError(
                 "Terrain mesh type not recognised. Allowed types are [None, plane, heightfield, trimesh]")
         self._create_envs()
-
 
     def _get_noise_scale_vec(self, cfg):
         """ Sets a vector used to scale the noise added to the observations.
@@ -185,7 +182,6 @@ class XBotLFreeEnv(LeggedRobot):
         noise_vec[44: 47] = noise_scales.quat * self.obs_scales.quat         # euler x,y
         return noise_vec
 
-
     def step(self, actions):
         if self.cfg.env.use_ref_actions:
             actions += self.ref_action
@@ -195,7 +191,6 @@ class XBotLFreeEnv(LeggedRobot):
         actions = (1 - delay) * actions + delay * self.actions
         actions += self.cfg.domain_rand.action_noise * torch.randn_like(actions) * actions
         return super().step(actions)
-
 
     def compute_observations(self):
 
@@ -210,10 +205,10 @@ class XBotLFreeEnv(LeggedRobot):
 
         self.command_input = torch.cat(
             (sin_pos, cos_pos, self.commands[:, :3] * self.commands_scale), dim=1)
-        
+
         q = (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos
         dq = self.dof_vel * self.obs_scales.dof_vel
-        
+
         diff = self.dof_pos - self.ref_dof_pos
 
         self.privileged_obs_buf = torch.cat((
@@ -234,6 +229,92 @@ class XBotLFreeEnv(LeggedRobot):
             contact_mask,  # 2
         ), dim=-1)
 
+        # random add dof_pos and dof_vel same lag
+        if self.cfg.domain_rand.add_dof_lag:
+            if self.cfg.domain_rand.randomize_dof_lag_timesteps_perstep:
+                self.dof_lag_timestep = torch.randint(
+                    self.cfg.domain_rand.dof_lag_timesteps_range[0],
+                    self.cfg.domain_rand.dof_lag_timesteps_range[1] + 1,
+                    (self.num_envs,),
+                    device=self.device,
+                )
+                cond = self.dof_lag_timestep > self.last_dof_lag_timestep + 1
+                self.dof_lag_timestep[cond] = self.last_dof_lag_timestep[cond] + 1
+                self.last_dof_lag_timestep = self.dof_lag_timestep.clone()
+            self.lagged_dof_pos = self.dof_lag_buffer[
+                torch.arange(self.num_envs),
+                : self.num_actions,
+                self.dof_lag_timestep.long(),
+            ]
+            self.lagged_dof_vel = self.dof_lag_buffer[
+                torch.arange(self.num_envs),
+                -self.num_actions :,
+                self.dof_lag_timestep.long(),
+            ]
+        # random add dof_pos and dof_vel different lag
+        elif self.cfg.domain_rand.add_dof_pos_vel_lag:
+            if self.cfg.domain_rand.randomize_dof_pos_lag_timesteps_perstep:
+                self.dof_pos_lag_timestep = torch.randint(
+                    self.cfg.domain_rand.dof_pos_lag_timesteps_range[0],
+                    self.cfg.domain_rand.dof_pos_lag_timesteps_range[1] + 1,
+                    (self.num_envs,),
+                    device=self.device,
+                )
+                cond = self.dof_pos_lag_timestep > self.last_dof_pos_lag_timestep + 1
+                self.dof_pos_lag_timestep[cond] = (
+                    self.last_dof_pos_lag_timestep[cond] + 1
+                )
+                self.last_dof_pos_lag_timestep = self.dof_pos_lag_timestep.clone()
+            self.lagged_dof_pos = self.dof_pos_lag_buffer[
+                torch.arange(self.num_envs), :, self.dof_pos_lag_timestep.long()
+            ]
+
+            if self.cfg.domain_rand.randomize_dof_vel_lag_timesteps_perstep:
+                self.dof_vel_lag_timestep = torch.randint(
+                    self.cfg.domain_rand.dof_vel_lag_timesteps_range[0],
+                    self.cfg.domain_rand.dof_vel_lag_timesteps_range[1] + 1,
+                    (self.num_envs,),
+                    device=self.device,
+                )
+                cond = self.dof_vel_lag_timestep > self.last_dof_vel_lag_timestep + 1
+                self.dof_vel_lag_timestep[cond] = (
+                    self.last_dof_vel_lag_timestep[cond] + 1
+                )
+                self.last_dof_vel_lag_timestep = self.dof_vel_lag_timestep.clone()
+            self.lagged_dof_vel = self.dof_vel_lag_buffer[
+                torch.arange(self.num_envs), :, self.dof_vel_lag_timestep.long()
+            ]
+        # dof_pos and dof_vel has no lag
+        else:
+            self.lagged_dof_pos = self.dof_pos
+            self.lagged_dof_vel = self.dof_vel
+
+        # imu lag, including rpy and omega
+        if self.cfg.domain_rand.add_imu_lag:
+            if self.cfg.domain_rand.randomize_imu_lag_timesteps_perstep:
+                self.imu_lag_timestep = torch.randint(
+                    self.cfg.domain_rand.imu_lag_timesteps_range[0],
+                    self.cfg.domain_rand.imu_lag_timesteps_range[1] + 1,
+                    (self.num_envs,),
+                    device=self.device,
+                )
+                cond = self.imu_lag_timestep > self.last_imu_lag_timestep + 1
+                self.imu_lag_timestep[cond] = self.last_imu_lag_timestep[cond] + 1
+                self.last_imu_lag_timestep = self.imu_lag_timestep.clone()
+            self.lagged_imu = self.imu_lag_buffer[
+                torch.arange(self.num_envs), :, self.imu_lag_timestep.int()
+            ]
+            self.lagged_base_ang_vel = self.lagged_imu[:, :3].clone()
+            self.lagged_base_euler_xyz = self.lagged_imu[:, -3:].clone()
+        # no imu lag
+        else:
+            self.lagged_base_ang_vel = self.base_ang_vel[:, :3]
+            self.lagged_base_euler_xyz = self.base_euler_xyz[:, -3:]
+
+        # obs q and dq
+        q = (self.lagged_dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos
+        dq = self.lagged_dof_vel * self.obs_scales.dof_vel
+
         obs_buf = torch.cat((
             self.command_input,  # 5 = 2D(sin cos) + 3D(vel_x, vel_y, aug_vel_yaw)
             q,    # 12D
@@ -246,14 +327,13 @@ class XBotLFreeEnv(LeggedRobot):
         if self.cfg.terrain.measure_heights:
             heights = torch.clip(self.root_states[:, 2].unsqueeze(1) - 0.5 - self.measured_heights, -1, 1.) * self.obs_scales.height_measurements
             self.privileged_obs_buf = torch.cat((self.obs_buf, heights), dim=-1)
-        
+
         if self.add_noise:  
             obs_now = obs_buf.clone() + torch.randn_like(obs_buf) * self.noise_scale_vec * self.cfg.noise.noise_level
         else:
             obs_now = obs_buf.clone()
         self.obs_history.append(obs_now)
         self.critic_history.append(self.privileged_obs_buf)
-
 
         obs_buf_all = torch.stack([self.obs_history[i]
                                    for i in range(self.obs_history.maxlen)], dim=1)  # N,T,K
@@ -268,7 +348,7 @@ class XBotLFreeEnv(LeggedRobot):
         for i in range(self.critic_history.maxlen):
             self.critic_history[i][env_ids] *= 0
 
-# ================================================ Rewards ================================================== #
+    # ================================================ Rewards ================================================== #
     def _reward_joint_pos(self):
         """
         Calculates the reward based on the difference between the current joint positions and the target joint positions.
@@ -291,7 +371,6 @@ class XBotLFreeEnv(LeggedRobot):
         d_max = torch.clamp(foot_dist - max_df, 0, 0.5)
         return (torch.exp(-torch.abs(d_min) * 100) + torch.exp(-torch.abs(d_max) * 100)) / 2
 
-
     def _reward_knee_distance(self):
         """
         Calculates the reward based on the distance between the knee of the humanoid.
@@ -303,7 +382,6 @@ class XBotLFreeEnv(LeggedRobot):
         d_min = torch.clamp(foot_dist - fd, -0.5, 0.)
         d_max = torch.clamp(foot_dist - max_df, 0, 0.5)
         return (torch.exp(-torch.abs(d_min) * 100) + torch.exp(-torch.abs(d_max) * 100)) / 2
-
 
     def _reward_foot_slip(self):
         """
@@ -392,7 +470,6 @@ class XBotLFreeEnv(LeggedRobot):
         rew = torch.exp(-torch.norm(root_acc, dim=1) * 3)
         return rew
 
-
     def _reward_vel_mismatch_exp(self):
         """
         Computes a reward based on the mismatch in the robot's linear and angular velocities. 
@@ -438,11 +515,11 @@ class XBotLFreeEnv(LeggedRobot):
         Tracks angular velocity commands for yaw rotation.
         Computes a reward based on how closely the robot's angular velocity matches the commanded yaw values.
         """   
-        
+
         ang_vel_error = torch.square(
             self.commands[:, 2] - self.base_ang_vel[:, 2])
         return torch.exp(-ang_vel_error * self.cfg.rewards.tracking_sigma)
-    
+
     def _reward_feet_clearance(self):
         """
         Calculates reward based on the clearance of the swing leg from the ground during movement.
@@ -498,7 +575,7 @@ class XBotLFreeEnv(LeggedRobot):
         # Sign mismatch has the highest priority
         reward[sign_mismatch] = -2.0
         return reward * (self.commands[:, 0].abs() > 0.1)
-    
+
     def _reward_torques(self):
         """
         Penalizes the use of high torques in the robot's joints. Encourages efficient movement by minimizing
@@ -512,21 +589,21 @@ class XBotLFreeEnv(LeggedRobot):
         more controlled movements.
         """
         return torch.sum(torch.square(self.dof_vel), dim=1)
-    
+
     def _reward_dof_acc(self):
         """
         Penalizes high accelerations at the robot's degrees of freedom (DOF). This is important for ensuring
         smooth and stable motion, reducing wear on the robot's mechanical parts.
         """
         return torch.sum(torch.square((self.last_dof_vel - self.dof_vel) / self.dt), dim=1)
-    
+
     def _reward_collision(self):
         """
         Penalizes collisions of the robot with the environment, specifically focusing on selected body parts.
         This encourages the robot to avoid undesired contact with objects or surfaces.
         """
         return torch.sum(1.*(torch.norm(self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 0.1), dim=1)
-    
+
     def _reward_action_smoothness(self):
         """
         Encourages smoothness in the robot's actions by penalizing large differences between consecutive actions.

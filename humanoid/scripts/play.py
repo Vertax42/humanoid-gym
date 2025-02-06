@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-FileCopyrightText: Copyright (c) 2021 ETH Zurich, Nikita Rudin
 # SPDX-License-Identifier: BSD-3-Clause
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -37,12 +37,28 @@ from humanoid import LEGGED_GYM_ROOT_DIR
 
 # import isaacgym
 from humanoid.envs import *
-from humanoid.utils import  get_args, export_policy_as_jit, task_registry, Logger
+from humanoid.utils import get_args, export_policy_as_jit, task_registry, Logger
 from isaacgym.torch_utils import *
 
 import torch
 from tqdm import tqdm
 from datetime import datetime
+import logging
+
+ACTION_JOINT_NAMES = [
+    "LEFT_LEG_ROLL_JOINT",
+    "LEFT_LEG_YAW_JOINT",
+    "LEFT_LEG_PITCH_JOINT",
+    "LEFT_KNEE_JOINT",
+    "LEFT_ANKLE_PITCH_JOINT",
+    "LEFT_ANKLE_ROLL_JOINT",
+    "RIGHT_LEG_ROLL_JOINT",
+    "RIGHT_LEG_YAW_JOINT",
+    "RIGHT_LEG_PITCH_JOINT",
+    "RIGHT_KNEE_JOINT",
+    "RIGHT_ANKLE_PITCH_JOINT",
+    "RIGHT_ANKLE_ROLL_JOINT",
+]
 
 
 def play(args):
@@ -51,17 +67,16 @@ def play(args):
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 1)
     env_cfg.sim.max_gpu_contact_pairs = 2**10
     # env_cfg.terrain.mesh_type = 'trimesh'
-    env_cfg.terrain.mesh_type = 'plane'
+    env_cfg.terrain.mesh_type = "plane"
     env_cfg.terrain.num_rows = 5
     env_cfg.terrain.num_cols = 5
-    env_cfg.terrain.curriculum = False     
+    env_cfg.terrain.curriculum = False
     env_cfg.terrain.max_init_terrain_level = 5
     env_cfg.noise.add_noise = True
-    env_cfg.domain_rand.push_robots = False 
-    env_cfg.domain_rand.joint_angle_noise = 0.
+    env_cfg.domain_rand.push_robots = False
+    env_cfg.domain_rand.joint_angle_noise = 0.0
     env_cfg.noise.curriculum = False
     env_cfg.noise.noise_level = 0.5
-
 
     train_cfg.seed = 123145
     print("train_cfg.runner_class_name:", train_cfg.runner_class_name)
@@ -74,53 +89,103 @@ def play(args):
 
     # load policy
     train_cfg.runner.resume = True
-    ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
+    ppo_runner, train_cfg = task_registry.make_alg_runner(
+        env=env, name=args.task, args=args, train_cfg=train_cfg
+    )
     policy = ppo_runner.get_inference_policy(device=env.device)
-    
+
     # export policy as a jit module (used to run it from C++)
     if EXPORT_POLICY:
-        path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'policies')
+        path = os.path.join(
+            LEGGED_GYM_ROOT_DIR,
+            "logs",
+            train_cfg.runner.experiment_name,
+            "exported",
+            "policies",
+        )
         export_policy_as_jit(ppo_runner.alg.actor_critic, path)
-        print('Exported policy as jit script to: ', path)
+        print("Exported policy as jit script to: ", path)
 
     logger = Logger(env.dt)
-    robot_index = 0 # which robot is used for logging
-    joint_index = 1 # which joint is used for logging
-    stop_state_log = 1200 # number of steps before plotting states
+    robot_index = 0  # which robot is used for logging
+    joint_index = 1  # which joint is used for logging
+    stop_state_log = 1200  # number of steps before plotting states
     if RENDER:
         camera_properties = gymapi.CameraProperties()
         camera_properties.width = 1920
         camera_properties.height = 1080
         h1 = env.gym.create_camera_sensor(env.envs[0], camera_properties)
         camera_offset = gymapi.Vec3(1, -1, 0.5)
-        camera_rotation = gymapi.Quat.from_axis_angle(gymapi.Vec3(-0.3, 0.2, 1),
-                                                    np.deg2rad(135))
+        camera_rotation = gymapi.Quat.from_axis_angle(
+            gymapi.Vec3(-0.3, 0.2, 1), np.deg2rad(135)
+        )
         actor_handle = env.gym.get_actor_handle(env.envs[0], 0)
         body_handle = env.gym.get_actor_rigid_body_handle(env.envs[0], actor_handle, 0)
         env.gym.attach_camera_to_body(
-            h1, env.envs[0], body_handle,
+            h1,
+            env.envs[0],
+            body_handle,
             gymapi.Transform(camera_offset, camera_rotation),
-            gymapi.FOLLOW_POSITION)
+            gymapi.FOLLOW_POSITION,
+        )
 
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        video_dir = os.path.join(LEGGED_GYM_ROOT_DIR, 'videos')
-        experiment_dir = os.path.join(LEGGED_GYM_ROOT_DIR, 'videos', train_cfg.runner.experiment_name)
-        dir = os.path.join(experiment_dir, datetime.now().strftime('%b%d_%H-%M-%S')+ args.run_name + '.mp4')
+        video_dir = os.path.join(LEGGED_GYM_ROOT_DIR, "videos")
+        experiment_dir = os.path.join(
+            LEGGED_GYM_ROOT_DIR, "videos", train_cfg.runner.experiment_name
+        )
+        dir = os.path.join(
+            experiment_dir,
+            datetime.now().strftime("%b%d_%H-%M-%S") + args.run_name + ".mp4",
+        )
         if not os.path.exists(video_dir):
             os.mkdir(video_dir)
         if not os.path.exists(experiment_dir):
             os.mkdir(experiment_dir)
         video = cv2.VideoWriter(dir, fourcc, 50.0, (1920, 1080))
 
+    logging.basicConfig(
+        filename="simulation.log",  # 日志文件名
+        level=logging.INFO,  # 记录级别为INFO及以上
+        format="%(asctime)s - %(message)s",  # 包含时间戳
+        filemode="w",  # 追加模式，不会覆盖旧日志
+    )
+
     for i in tqdm(range(stop_state_log)):
 
-        actions = policy(obs.detach()) # * 0.
-        
+        actions = policy(obs.detach())  # * 0.
+
         if FIX_COMMAND:
-            env.commands[:, 0] = 0.5    # 1.0
-            env.commands[:, 1] = 0.
-            env.commands[:, 2] = 0.
-            env.commands[:, 3] = 0.
+            env.commands[:, 0] = 0.4  # 1.0
+            env.commands[:, 1] = 0.0
+            env.commands[:, 2] = 0.0
+            env.commands[:, 3] = 0.0
+        # 将张量转换为可记录的格式（如numpy数组）
+
+        obs_np = obs.detach().cpu().numpy().reshape(15, -1)[-1, :]
+        actions_np = actions.detach().squeeze(0).cpu().numpy()
+
+        kp = np.array([200, 200, 350, 350, 15, 15, 200, 200, 350, 350, 15, 15])
+        kd = np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10])
+        pos_des = np.copy(actions_np)
+        pos_act = np.copy(obs_np[5:17])
+        vel_act = np.copy(obs_np[17:29])
+        torque = kp * (pos_des - pos_act) - kd * vel_act
+        # 记录日志（精简关键信息）
+        logging.info(
+            f"Step {i}:\n"
+            f"  Obs Shape={obs_np.shape}\n"
+            f"  Obs[0, 1] --> sin_p, cos_p: {obs_np[0]}, {obs_np[1]}\n"
+            f"  Obs[2, 3, 4] --> cmd_x, cmd_y, cmd_yaw: {obs_np[2]}, {obs_np[3]}, {obs_np[4]}\n"
+            f"  Obs[5 ~ 17] --> joint_pos: {obs_np[5:17].tolist()}\n"  # 转列表更易读
+            f"  Obs[17 ~ 29] --> joint_vel: {obs_np[17:29].round(4).tolist()}\n"  # 限制小数位数
+            f"  Obs[29 ~ 41] --> last_action: {obs_np[29:41].round(4).tolist()}\n"
+            f"  Obs[41 ~ 44] --> base_ang_vel: {obs_np[41:44].round(4).tolist()}\n"
+            f"  Obs[44 ~ 47] --> base_lin_vel: {obs_np[44:47].round(4).tolist()}\n"
+            f"  Actions Shape={actions_np.shape}\n"
+            f"  Actions[0 ~ 11] --> joint_target: {actions_np[0:11].round(6).tolist()}\n"
+            f"  Output Torque: {torque.round(6).tolist()}"
+        )
 
         obs, critic_obs, rews, dones, infos = env.step(actions.detach())
 
@@ -135,33 +200,37 @@ def play(args):
 
         logger.log_states(
             {
-                'dof_pos_target': actions[robot_index, joint_index].item() * env.cfg.control.action_scale,
-                'dof_pos': env.dof_pos[robot_index, joint_index].item(),
-                'dof_vel': env.dof_vel[robot_index, joint_index].item(),
-                'dof_torque': env.torques[robot_index, joint_index].item(),
-                'command_x': env.commands[robot_index, 0].item(),
-                'command_y': env.commands[robot_index, 1].item(),
-                'command_yaw': env.commands[robot_index, 2].item(),
-                'base_vel_x': env.base_lin_vel[robot_index, 0].item(),
-                'base_vel_y': env.base_lin_vel[robot_index, 1].item(),
-                'base_vel_z': env.base_lin_vel[robot_index, 2].item(),
-                'base_vel_yaw': env.base_ang_vel[robot_index, 2].item(),
-                'contact_forces_z': env.contact_forces[robot_index, env.feet_indices, 2].cpu().numpy()
+                "dof_pos_target": actions[robot_index, joint_index].item()
+                * env.cfg.control.action_scale,
+                "dof_pos": env.dof_pos[robot_index, joint_index].item(),
+                "dof_vel": env.dof_vel[robot_index, joint_index].item(),
+                "dof_torque": env.torques[robot_index, joint_index].item(),
+                "command_x": env.commands[robot_index, 0].item(),
+                "command_y": env.commands[robot_index, 1].item(),
+                "command_yaw": env.commands[robot_index, 2].item(),
+                "base_vel_x": env.base_lin_vel[robot_index, 0].item(),
+                "base_vel_y": env.base_lin_vel[robot_index, 1].item(),
+                "base_vel_z": env.base_lin_vel[robot_index, 2].item(),
+                "base_vel_yaw": env.base_ang_vel[robot_index, 2].item(),
+                "contact_forces_z": env.contact_forces[robot_index, env.feet_indices, 2]
+                .cpu()
+                .numpy(),
             }
-            )
+        )
         # ====================== Log states ======================
         if infos["episode"]:
             num_episodes = torch.sum(env.reset_buf).item()
-            if num_episodes>0:
+            if num_episodes > 0:
                 logger.log_rewards(infos["episode"], num_episodes)
 
     logger.print_rewards()
     logger.plot_states()
-    
+
     if RENDER:
         video.release()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     EXPORT_POLICY = True
     RENDER = True
     FIX_COMMAND = True

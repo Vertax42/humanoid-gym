@@ -159,6 +159,33 @@ class XBotLCfg(LeggedRobotCfg):
         action_delay = 0.5
         action_noise = 0.02
 
+        add_lag = True
+        randomize_lag_timesteps = True
+        randomize_lag_timesteps_perstep = False
+        lag_timesteps_range = [5, 40]
+        # add lag to different parts of the robot
+        add_dof_lag = True
+        randomize_dof_lag_timesteps = True
+        randomize_dof_lag_timesteps_perstep = False
+        dof_lag_timesteps_range = [0, 40]
+        # add lag to different parts of the robot
+        add_dof_pos_vel_lag = False
+        randomize_dof_pos_lag_timesteps = False
+        randomize_dof_pos_lag_timesteps_perstep = False
+        dof_pos_lag_timesteps_range = [7, 25]
+        randomize_dof_vel_lag_timesteps = False
+        randomize_dof_vel_lag_timesteps_perstep = False
+        dof_vel_lag_timesteps_range = [7, 25]
+        # add lag to imu
+        add_imu_lag = False
+        randomize_imu_lag_timesteps = True
+        randomize_imu_lag_timesteps_perstep = False
+        imu_lag_timesteps_range = [1, 10]
+          
+        randomize_coulomb_friction = True
+        joint_coulomb_range = [0.1, 0.9]
+        joint_viscous_range = [0.05, 0.1]
+        
     class commands(LeggedRobotCfg.commands):
         # Vers: lin_vel_x, lin_vel_y, ang_vel_yaw, heading (in heading mode ang_vel_yaw is recomputed from heading error)
         num_commands = 4
