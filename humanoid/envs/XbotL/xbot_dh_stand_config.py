@@ -40,7 +40,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
 
     class env(LeggedRobotCfg.env):
         # change the observation dim
-        frame_stack = 15  # all histroy obs num
+        frame_stack = 66  # all histroy obs num
         short_frame_stack = 5  # short history step
         c_frame_stack = 3  # all histroy privileged obs num
         num_single_obs = 47
@@ -175,7 +175,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
             num_threads = 10
             solver_type = 1  # 0: pgs, 1: tgs
             num_position_iterations = 4
-            num_velocity_iterations = 1
+            num_velocity_iterations = 0
             contact_offset = 0.01  # [m]
             rest_offset = 0.0  # [m]
             bounce_threshold_velocity = 0.1  # 0.5 #0.5 [m/s]
@@ -187,7 +187,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
 
     class domain_rand(LeggedRobotCfg.domain_rand):
         randomize_friction = True
-        friction_range = [0.1, 2.0]
+        friction_range = [0.2, 1.3]
         restitution_range = [0.0, 0.4]
 
         # push
@@ -203,7 +203,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
             0.25,
         ]  # increase push duration during training
         max_push_vel_xy = 0.2
-        max_push_ang_vel = 0.4
+        max_push_ang_vel = 0.2
 
         randomize_base_mass = True
         added_mass_range = [
@@ -222,12 +222,12 @@ class XBotDHStandCfg(LeggedRobotCfg):
         torque_multiplier_range = [0.8, 1.2]
 
         randomize_link_mass = True
-        added_link_mass_range = [0.8, 1.2]
+        added_link_mass_range = [0.9, 1.2]
 
         randomize_motor_offset = True
         motor_offset_range = [-0.035, 0.035]  # Offset to add to the motor angles
 
-        randomize_joint_friction = False
+        randomize_joint_friction = True
         randomize_joint_friction_each_joint = False
         joint_friction_range = [0.01, 1.15]
         joint_1_friction_range = [0.01, 1.15]
@@ -241,7 +241,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         joint_9_friction_range = [0.5, 1.3]
         joint_10_friction_range = [0.5, 1.3]
 
-        randomize_joint_damping = False
+        randomize_joint_damping = True
         randomize_joint_damping_each_joint = False
         joint_damping_range = [0.3, 1.5]
         joint_1_damping_range = [0.3, 1.5]
@@ -255,7 +255,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         joint_9_damping_range = [0.9, 1.5]
         joint_10_damping_range = [0.9, 1.5]
 
-        randomize_joint_armature = False
+        randomize_joint_armature = True
         randomize_joint_armature_each_joint = False
         joint_armature_range = [0.0001, 0.05]  # Factor
         joint_1_armature_range = [0.0001, 0.05]
@@ -327,7 +327,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
             heading = [-3.14, 3.14]
 
     class rewards:
-        soft_dof_pos_limit = 0.9
+        soft_dof_pos_limit = 0.98
         soft_dof_vel_limit = 0.9
         soft_torque_limit = 0.9
         base_height_target = 0.89
@@ -362,19 +362,19 @@ class XBotDHStandCfg(LeggedRobotCfg):
         max_contact_force = 700  # forces above this value are penalized
 
         class scales:
-            ref_joint_pos = 1.0
+            ref_joint_pos = 2.2
             feet_clearance = 1.0
-            feet_contact_number = 1.2
+            feet_contact_number = 2.0
             # gait
-            feet_air_time = 1.5
+            feet_air_time = 1.2
             foot_slip = -0.1
             feet_distance = 0.2
             knee_distance = 0.2
             # contact
             feet_contact_forces = -0.01
             # vel tracking
-            tracking_lin_vel = 2.5
-            tracking_ang_vel = 1.4
+            tracking_lin_vel = 1.8
+            tracking_ang_vel = 1.1
             vel_mismatch_exp = 0.5  # lin_z; ang x,y
             low_speed = 0.2
             track_vel_hard = 0.5
@@ -386,11 +386,11 @@ class XBotDHStandCfg(LeggedRobotCfg):
             base_acc = 0.2
             # energy
             action_smoothness = -0.002
-            torques = -5e-7
-            dof_vel = -5e-4
+            torques = -8e-9
+            dof_vel = -2e-8
             dof_acc = -1e-7
             collision = -1.0
-            stand_still = 1.5
+            stand_still = 2.5
             # limits
             dof_vel_limits = -1
             dof_pos_limits = -10.0
