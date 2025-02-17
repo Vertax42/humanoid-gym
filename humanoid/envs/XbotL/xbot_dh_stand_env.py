@@ -108,7 +108,7 @@ class XBotDHStandEnv(LeggedRobot):
         up_axis_idx (int): The index representing the up axis.
         command_input (torch.Tensor): Tensor representing the command input.
         privileged_obs_buf (torch.Tensor): Tensor representing the privileged observations buffer.
-        obs_buf (torch.Tensor): Tensor representing the observations buffer.
+         (torch.Tensor): Tensor representing the observations buffer.
         obs_history (collections.deque): Deque containing the history of observations.
         critic_history (collections.deque): Deque containing the history of critic observations.
 
@@ -359,44 +359,28 @@ class XBotDHStandEnv(LeggedRobot):
         self.ref_dof_pos = torch.zeros_like(self.dof_pos)
         # left swing
         sin_pos_l[sin_pos_l > 0] = 0
-        self.ref_dof_pos[:, 0] = (
-            -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[0]
-        )
-        self.ref_dof_pos[:, 1] = (
-            -sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[1]
-        )
-        self.ref_dof_pos[:, 2] = (
-            sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[2]
-        )
-        self.ref_dof_pos[:, 3] = (
-            sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[3]
-        )
-        self.ref_dof_pos[:, 4] = (
-            sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[4]
-        )
-        self.ref_dof_pos[:, 5] = (
-            sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[5]
-        )
+        # self.ref_dof_pos[:, 0] = (
+        #     sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[0]
+        # )
+        # self.ref_dof_pos[:, 1] = (
+        #     sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[1]
+        # )
+        self.ref_dof_pos[:, 2] = sin_pos_l * 0.17
+        self.ref_dof_pos[:, 3] = sin_pos_l * 0.17 * 2
+        self.ref_dof_pos[:, 4] = sin_pos_l * 0.17
+        # self.ref_dof_pos[:, 5] = (
+        #     sin_pos_l * self.cfg.rewards.final_swing_joint_delta_pos[5]
+        # )
         # right
         sin_pos_r[sin_pos_r < 0] = 0
-        self.ref_dof_pos[:, 6] = (
-            sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[6]
-        )
-        self.ref_dof_pos[:, 7] = (
-            sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[7]
-        )
-        self.ref_dof_pos[:, 8] = (
-            sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[8]
-        )
-        self.ref_dof_pos[:, 9] = (
-            sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[9]
-        )
-        self.ref_dof_pos[:, 10] = (
-            sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[10]
-        )
-        self.ref_dof_pos[:, 11] = (
-            sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[11]
-        )
+        # self.ref_dof_pos[:, 6] = sin_pos_l * 0.17
+        # self.ref_dof_pos[:, 7] = sin_pos_l * 0.17 * 2
+        self.ref_dof_pos[:, 8] = sin_pos_l * 0.17
+        self.ref_dof_pos[:, 9] = sin_pos_l * 0.17 * 2
+        self.ref_dof_pos[:, 10] = sin_pos_l * 0.17
+        # self.ref_dof_pos[:, 11] = (
+        #     sin_pos_r * self.cfg.rewards.final_swing_joint_delta_pos[11]
+        # )
 
         self.ref_dof_pos[torch.abs(sin_pos) < 0.1] = 0.0
 
@@ -404,7 +388,7 @@ class XBotDHStandEnv(LeggedRobot):
         self.ref_action = 2 * self.ref_dof_pos
 
         # self.ref_dof_pos set ref dof pos for swing leg, ref_dof_pos=0 for stance leg
-        self.ref_dof_pos += self.default_dof_pos
+        # self.ref_dof_pos += self.default_dof_pos
 
     def create_sim(self):
         """Creates simulation, terrain and evironments"""
@@ -444,23 +428,23 @@ class XBotDHStandEnv(LeggedRobot):
         noise_vec = torch.zeros(self.cfg.env.num_single_obs, device=self.device)
         self.add_noise = self.cfg.noise.add_noise
         noise_scales = self.cfg.noise.noise_scales
-        noise_vec[0: self.cfg.env.num_commands] = 0.0  # commands
+        noise_vec[0 : self.cfg.env.num_commands] = 0.0  # commands
         noise_vec[
-            self.cfg.env.num_commands: self.cfg.env.num_commands + self.num_actions
+            self.cfg.env.num_commands : self.cfg.env.num_commands + self.num_actions
         ] = (noise_scales.dof_pos * self.obs_scales.dof_pos)
         noise_vec[
             self.cfg.env.num_commands
-            + self.num_actions: self.cfg.env.num_commands
+            + self.num_actions : self.cfg.env.num_commands
             + 2 * self.num_actions
         ] = (noise_scales.dof_vel * self.obs_scales.dof_vel)
         noise_vec[
             self.cfg.env.num_commands
-            + 2 * self.num_actions: self.cfg.env.num_commands
+            + 2 * self.num_actions : self.cfg.env.num_commands
             + 3 * self.num_actions
         ] = 0.0  # previous actions
         noise_vec[
             self.cfg.env.num_commands
-            + 3 * self.num_actions: self.cfg.env.num_commands
+            + 3 * self.num_actions : self.cfg.env.num_commands
             + 3 * self.num_actions
             + 3
         ] = (
@@ -469,7 +453,7 @@ class XBotDHStandEnv(LeggedRobot):
         noise_vec[
             self.cfg.env.num_commands
             + 3 * self.num_actions
-            + 3: self.cfg.env.num_commands
+            + 3 : self.cfg.env.num_commands
             + 3 * self.num_actions
             + 6
         ] = (
@@ -503,7 +487,8 @@ class XBotDHStandEnv(LeggedRobot):
         privileged_obs_buf = torch.cat(
             (
                 self.command_input,  # 2 + 3
-                (self.dof_pos - self.default_joint_pd_target) * self.obs_scales.dof_pos,  # 12
+                (self.dof_pos - self.default_joint_pd_target)
+                * self.obs_scales.dof_pos,  # 12
                 self.dof_vel * self.obs_scales.dof_vel,  # 12
                 self.actions,  # 12
                 diff,  # 12
@@ -539,7 +524,7 @@ class XBotDHStandEnv(LeggedRobot):
             ]
             self.lagged_dof_vel = self.dof_lag_buffer[
                 torch.arange(self.num_envs),
-                -self.num_actions:,
+                -self.num_actions :,
                 self.dof_lag_timestep.long(),
             ]
         # random add dof_pos and dof_vel different lag
@@ -790,7 +775,7 @@ class XBotDHStandEnv(LeggedRobot):
         r = torch.exp(-2 * torch.norm(diff, dim=1)) - 0.2 * torch.norm(
             diff, dim=1
         ).clamp(0, 0.5)
-        r[stand_command] = 1.0
+        # r[stand_command] = 1.0
         return r
 
     def _reward_feet_distance(self):
@@ -828,9 +813,7 @@ class XBotDHStandEnv(LeggedRobot):
         with the ground. The speed of the foot is calculated and scaled by the contact conditions.
         """
         contact = self.contact_forces[:, self.feet_indices, 2] > 5.0
-        foot_speed_norm = torch.norm(
-            self.rigid_state[:, self.feet_indices, 10:12], dim=2
-        )
+        foot_speed_norm = torch.norm(self.rigid_state[:, self.feet_indices, 7:9], dim=2)
         rew = torch.sqrt(foot_speed_norm)
         rew *= contact
         return torch.sum(rew, dim=1)
@@ -1061,7 +1044,7 @@ class XBotDHStandEnv(LeggedRobot):
         reward[speed_desired] = 1.2
         # Sign mismatch has the highest priority
         reward[sign_mismatch] = -2.0
-        return reward * (self.commands[:, 0].abs() > 0.05)
+        return reward * (self.commands[:, 0].abs() > 0.1)
 
     def _reward_torques(self):
         """

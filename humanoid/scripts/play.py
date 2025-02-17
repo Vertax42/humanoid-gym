@@ -85,7 +85,7 @@ if joystick_use:
 def play(args):
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
     # override some parameters for testing
-    env_cfg.env.num_envs = min(env_cfg.env.num_envs, 10)
+    env_cfg.env.num_envs = min(env_cfg.env.num_envs, 2)
     # env_cfg.terrain.mesh_type = 'trimesh'
     env_cfg.terrain.mesh_type = "plane"
     env_cfg.terrain.num_rows = 5
@@ -189,9 +189,9 @@ def play(args):
             env.commands[:, 3] = 0.0
 
         else:
-            env.commands[:, 0] = x_vel_cmd
-            env.commands[:, 1] = y_vel_cmd
-            env.commands[:, 2] = yaw_vel_cmd
+            env.commands[:, 0] = 0.5  # 1.0
+            env.commands[:, 1] = 0
+            env.commands[:, 2] = 0
             env.commands[:, 3] = 0.0
 
         obs, critic_obs, rews, dones, infos = env.step(actions.detach())
@@ -264,7 +264,7 @@ def play(args):
 
 
 if __name__ == "__main__":
-    EXPORT_POLICY = True
+    EXPORT_POLICY = False
     RENDER = False
     FIX_COMMAND = True
     args = get_args()

@@ -40,7 +40,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
 
     class env(LeggedRobotCfg.env):
         # change the observation dim
-        frame_stack = 42  # all histroy obs num
+        frame_stack = 15  # all histroy obs num
         short_frame_stack = 5  # short history step
         c_frame_stack = 3  # all histroy privileged obs num
         num_single_obs = 47
@@ -64,7 +64,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         file = "{LEGGED_GYM_ROOT_DIR}/resources/robots/XBot/urdf/XBot-L.urdf"
         xml_file = "{LEGGED_GYM_ROOT_DIR}/resources/robots/XBot/mjcf/XBot-L.xml"
 
-        name = "XBotStandCfg"
+        name = "XBot-L"
         foot_name = "ankle_roll"
         knee_name = "knee"
 
@@ -175,7 +175,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
             num_threads = 10
             solver_type = 1  # 0: pgs, 1: tgs
             num_position_iterations = 4
-            num_velocity_iterations = 0
+            num_velocity_iterations = 1
             contact_offset = 0.01  # [m]
             rest_offset = 0.0  # [m]
             bounce_threshold_velocity = 0.1  # 0.5 #0.5 [m/s]
@@ -227,7 +227,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         randomize_motor_offset = True
         motor_offset_range = [-0.035, 0.035]  # Offset to add to the motor angles
 
-        randomize_joint_friction = True
+        randomize_joint_friction = False
         randomize_joint_friction_each_joint = False
         joint_friction_range = [0.01, 1.15]
         joint_1_friction_range = [0.01, 1.15]
@@ -241,7 +241,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         joint_9_friction_range = [0.5, 1.3]
         joint_10_friction_range = [0.5, 1.3]
 
-        randomize_joint_damping = True
+        randomize_joint_damping = False
         randomize_joint_damping_each_joint = False
         joint_damping_range = [0.3, 1.5]
         joint_1_damping_range = [0.3, 1.5]
@@ -255,7 +255,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         joint_9_damping_range = [0.9, 1.5]
         joint_10_damping_range = [0.9, 1.5]
 
-        randomize_joint_armature = True
+        randomize_joint_armature = False
         randomize_joint_armature_each_joint = False
         joint_armature_range = [0.0001, 0.05]  # Factor
         joint_1_armature_range = [0.0001, 0.05]
@@ -331,8 +331,8 @@ class XBotDHStandCfg(LeggedRobotCfg):
         soft_dof_vel_limit = 0.9
         soft_torque_limit = 0.9
         base_height_target = 0.89
-        foot_min_dist = 0.26
-        foot_max_dist = 0.34
+        foot_min_dist = 0.2
+        foot_max_dist = 1.0
 
         # foot_ref_joints = [-0.34, -0.15, 0.25, 0.34, 0.15, -0.25]
         # final_swing_joint_pos = final_swing_joint_delta_pos + default_pos
@@ -362,19 +362,19 @@ class XBotDHStandCfg(LeggedRobotCfg):
         max_contact_force = 700  # forces above this value are penalized
 
         class scales:
-            ref_joint_pos = 2.2
+            ref_joint_pos = 1.0
             feet_clearance = 1.0
             feet_contact_number = 1.2
             # gait
-            feet_air_time = 1.2
+            feet_air_time = 1.5
             foot_slip = -0.1
             feet_distance = 0.2
             knee_distance = 0.2
             # contact
             feet_contact_forces = -0.01
             # vel tracking
-            tracking_lin_vel = 2.0
-            tracking_ang_vel = 1.1
+            tracking_lin_vel = 2.5
+            tracking_ang_vel = 1.4
             vel_mismatch_exp = 0.5  # lin_z; ang x,y
             low_speed = 0.2
             track_vel_hard = 0.5
@@ -386,11 +386,11 @@ class XBotDHStandCfg(LeggedRobotCfg):
             base_acc = 0.2
             # energy
             action_smoothness = -0.002
-            torques = -1e-5
+            torques = -5e-7
             dof_vel = -5e-4
             dof_acc = -1e-7
             collision = -1.0
-            stand_still = 2.5
+            stand_still = 1.5
             # limits
             dof_vel_limits = -1
             dof_pos_limits = -10.0
@@ -450,11 +450,11 @@ class XBotDHStandCfgPPO(LeggedRobotCfgPPO):
     class runner:
         policy_class_name = "ActorCriticDH"
         algorithm_class_name = "DHPPO"
-        num_steps_per_env = 48  # per iteration
+        num_steps_per_env = 24  # per iteration
         max_iterations = 20000  # number of policy updates
 
         # logging
-        save_interval = 500  # check for potential saves every this many iterations
+        save_interval = 100  # check for potential saves every this many iterations
         experiment_name = "XBotStandCfg_dh_stand"
         run_name = ""
         # load and resume
