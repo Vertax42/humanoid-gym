@@ -184,7 +184,7 @@ def play(args):
 
         if FIX_COMMAND:
             env.commands[:, 0] = 0.4  # 1.0
-            env.commands[:, 1] = 0
+            env.commands[:, 1] = 0.0
             env.commands[:, 2] = 0.0
             env.commands[:, 3] = 0.0
 
@@ -264,8 +264,8 @@ def play(args):
 
 
 if __name__ == "__main__":
-    EXPORT_POLICY = True
+    EXPORT_POLICY = False
     RENDER = False
-    FIX_COMMAND = False
+    FIX_COMMAND = True
     args = get_args()
     play(args)

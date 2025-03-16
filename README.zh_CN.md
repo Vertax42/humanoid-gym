@@ -1,10 +1,8 @@
 [English](README.md) | 中文
 
 ## 简介
-[智元灵犀X1](https://www.zhiyuan-robot.com/qzproduct/169.html) 是由智元研发并开源的模块化、高自由度人形机器人，X1的软件系统基于智元开源组件 `AimRT` 作为中间件实现，并且采用强化学习方法进行运动控制。
 
-本工程为智元灵犀X1所使用的强化学习训练代码，可配合智元灵犀X1配套的[推理软件](https://aimrt.org/)进行真机和仿真的行走调试，或导入其他机器人模型进行训练。
-![](doc/id.jpg)
+本工程为亿嘉和机器人xbot所使用的强化学习训练代码，可配合配套的[humanoid_rl](https://github.com/Vertax42/humanoid_rl)进行真机和仿真的行走调试，或导入其他机器人模型进行训练。        
 
 ## 代码运行
 
@@ -26,20 +24,20 @@
 
 ### 使用
 #### Train:
-```python scripts/train.py --task=x1_dh_stand --run_name=<run_name> --headless```
+```python scripts/train.py --task=xbot_dh_stand --run_name=<run_name> --headless```
 - 训练好的模型会存`/log/<experiment_name>/exported_data/<date_time><run_name>/model_<iteration>.pt` 其中 `<experiment_name>` 在config文件中定义.
 ![](doc/train.gif)
 
 #### Play:
-```python /scripts/play.py --task=x1_dh_stand --load_run=<date_time><run_name>```
+```python /scripts/play.py --task=xbot_dh_stand --load_run=<date_time><run_name>```
 ![](doc/play.gif)
 
 #### 生成jit模型:
-``` python scripts/export_policy_dh.py --task=x1_dh_stand --load_run=<date_time><run_name>  ```
+``` python scripts/export_policy_dh.py --task=xbot_dh_stand --load_run=<date_time><run_name>  ```
 - jit模型会存在 ``` log/exported_policies/<date_time>```
 
 #### 生成onnx模型:
-``` python scripts/export_onnx_dh.py --task=x1_dh_stand --load_run=<date_time>  ```
+``` python scripts/export_onnx_dh.py --task=xbot_dh_stand --load_run=<date_time>  ```
 - onnx模型会存在 ```log/exported_policies/<date_time>```
 
 #### 参数说明：
@@ -64,7 +62,7 @@
 ### sim2sim
 使用mujoco来进行sim2sim验证：
   ```
-  python scripts/sim2sim.py --task=x1_dh_stand --load_model /path/to/exported_policies/
+  python scripts/sim2sim.py --task=xbot_dh_stand --load_model /path/to/exported_policies/
   ```
 ![](doc/mujoco.gif)
 
@@ -94,8 +92,6 @@
 |  |— robots          # 机器人urdf, mjcf, mesh
 |— README.md          # 说明文档
 ```
-
-
 
 > 参考项目:
 >

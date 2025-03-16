@@ -135,14 +135,20 @@ class LeggedRobot(BaseTask):
         # step physics and render each frame
         self.render()
         for _ in range(self.cfg.control.decimation):
+            # 1.compute torque
             self.torques = self._compute_torques(self.actions).view(self.torques.shape)
+            # 2.set torque
             self.gym.set_dof_actuation_force_tensor(
                 self.sim, gymtorch.unwrap_tensor(self.torques)
             )
+            # 3.simulate one step
             self.gym.simulate(self.sim)
+            # 4.fetch results
             if self.device == "cpu":
                 self.gym.fetch_results(self.sim, True)
+            # 5.refresh dof state
             self.gym.refresh_dof_state_tensor(self.sim)
+            # 6.add dof lag
             if self.cfg.domain_rand.add_dof_lag:
                 q = self.dof_pos
                 dq = self.dof_vel
@@ -150,6 +156,7 @@ class LeggedRobot(BaseTask):
                     :, :, : self.cfg.domain_rand.dof_lag_timesteps_range[1]
                 ].clone()
                 self.dof_lag_buffer[:, :, 0] = torch.cat((q, dq), 1).clone()
+            # 7.add dof pos vel lag
             if self.cfg.domain_rand.add_dof_pos_vel_lag:
                 q = self.dof_pos
                 self.dof_pos_lag_buffer[:, :, 1:] = self.dof_pos_lag_buffer[
@@ -161,6 +168,7 @@ class LeggedRobot(BaseTask):
                     :, :, : self.cfg.domain_rand.dof_vel_lag_timesteps_range[1]
                 ].clone()
                 self.dof_vel_lag_buffer[:, :, 0] = dq.clone()
+            # 8.add imu lag
             if self.cfg.domain_rand.add_imu_lag:
                 self.gym.refresh_actor_root_state_tensor(self.sim)
                 self.base_quat[:] = self.root_states[:, 3:7]
@@ -175,6 +183,7 @@ class LeggedRobot(BaseTask):
                     (self.base_ang_vel, self.base_euler_xyz), 1
                 ).clone()
 
+        # 9.post physics step
         self.post_physics_step()
 
         # return clipped obs, clipped states (None), rewards, dones and infos
@@ -207,35 +216,44 @@ class LeggedRobot(BaseTask):
         calls self._post_physics_step_callback() for common computations
         calls self._draw_debug_vis() if needed
         """
+        # 1.refresh actor root state
         self.gym.refresh_actor_root_state_tensor(self.sim)
+        # 2.refresh net contact force
         self.gym.refresh_net_contact_force_tensor(self.sim)
+        # 3.refresh rigid body state
         self.gym.refresh_rigid_body_state_tensor(self.sim)
-
+        # 4.update episode length and common step counter
         self.episode_length_buf += 1
         self.common_step_counter += 1
-
-        # prepare quantities
+        # 5.prepare quantities
         self.base_quat[:] = self.root_states[:, 3:7]
         self.base_lin_vel[:] = quat_rotate_inverse(
             self.base_quat, self.root_states[:, 7:10]
         )
+        # 6.compute base ang vel
         self.base_ang_vel[:] = quat_rotate_inverse(
             self.base_quat, self.root_states[:, 10:13]
         )
+        # 7.compute projected gravity
         self.projected_gravity[:] = quat_rotate_inverse(
             self.base_quat, self.gravity_vec
         )
+        # 8.compute base euler xyz
         self.base_euler_xyz = get_euler_xyz_tensor(self.base_quat)
+        # 9.compute feet quat
         self.feet_quat = self.rigid_state[:, self.feet_indices, 3:7]
+        # 10.compute feet euler xyz
         self.feet_euler_xyz = get_euler_xyz_tensor(self.feet_quat)
-
+        # 11.post physics step callback
         self._post_physics_step_callback()
-
-        # compute observations, rewards, resets, ...
+        # 12.check termination
         self.check_termination()
+        # 13.compute reward
         self.compute_reward()
+        # 14.reset environments
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
+        # 15.compute observations
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
         # get last status
@@ -932,6 +950,7 @@ class LeggedRobot(BaseTask):
             .nonzero(as_tuple=False)
             .flatten()
         )
+        # 1.resample commands
         self._resample_commands(env_ids)
         if self.cfg.commands.heading_command:
             forward = quat_apply(self.base_quat, self.forward_vec)
@@ -939,10 +958,10 @@ class LeggedRobot(BaseTask):
             self.commands[:, 2] = torch.clip(
                 0.5 * wrap_to_pi(self.commands[:, 3] - heading), -1.0, 1.0
             )
-
+        # 2.measure heights
         if self.cfg.terrain.measure_heights:
             self.measured_heights = self._get_heights()
-
+        # 3.push robots
         if self.cfg.domain_rand.push_robots:
             i = int(self.common_step_counter / self.cfg.domain_rand.update_step)
             if i >= len(self.cfg.domain_rand.push_duration):
@@ -956,7 +975,7 @@ class LeggedRobot(BaseTask):
             else:
                 self.rand_push_force.zero_()
                 self.rand_push_torque.zero_()
-
+        # 4.add external force
         if self.cfg.domain_rand.add_ext_force:
             i = int(self.common_step_counter / self.cfg.domain_rand.add_update_step)
             if i >= len(self.cfg.domain_rand.add_duration):

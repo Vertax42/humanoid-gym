@@ -57,6 +57,7 @@ class DHOnPolicyRunner:
             + "_"
             + train_cfg["runner"]["run_name"]
         )
+        
         self.device = device
         self.env = env
         if self.env.num_privileged_obs is not None:
@@ -183,6 +184,7 @@ class DHOnPolicyRunner:
         self.tot_time += locs["collection_time"] + locs["learn_time"]
         iteration_time = locs["collection_time"] + locs["learn_time"]
 
+        # Original tensorboard logging
         ep_string = f""
         if locs["ep_infos"]:
             for key in locs["ep_infos"][0]:
@@ -287,16 +289,15 @@ class DHOnPolicyRunner:
         print(log_string)
 
     def save(self, path, infos=None):
-        torch.save(
-            {
-                "model_state_dict": self.alg.actor_critic.state_dict(),
-                "optimizer_state_dict": self.alg.optimizer.state_dict(),
-                "es_optimizer_state_dict": self.alg.state_estimator_optimizer.state_dict(),
-                "iter": self.it,
-                "infos": infos,
-            },
-            path,
-        )
+        checkpoint = {
+            "model_state_dict": self.alg.actor_critic.state_dict(),
+            "optimizer_state_dict": self.alg.optimizer.state_dict(),
+            "es_optimizer_state_dict": self.alg.state_estimator_optimizer.state_dict(),
+            "iter": self.it,
+            "infos": infos,
+        }
+        torch.save(checkpoint, path)
+        
 
     def load(self, path, load_optimizer=True):
         loaded_dict = torch.load(path)

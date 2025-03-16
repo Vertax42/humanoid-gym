@@ -72,6 +72,7 @@ if joystick_use:
             x_vel_cmd = -joystick.get_axis(1) * 1
             y_vel_cmd = -joystick.get_axis(0) * 1
             yaw_vel_cmd = -joystick.get_axis(3) * 1
+            # print(x_vel_cmd, y_vel_cmd, yaw_vel_cmd)
             pygame.time.delay(100)
 
     if joystick_opened and joystick_use:
@@ -214,7 +215,7 @@ def run_mujoco(policy, cfg, env_cfg):
                 stand_command = (vel_norm <= env_cfg.commands.stand_com_threshold)
                 obs[0, -1] = stand_command
             
-            print(x_vel_cmd, y_vel_cmd, yaw_vel_cmd)
+            # print(x_vel_cmd, y_vel_cmd, yaw_vel_cmd)
 
             obs = np.clip(obs, -env_cfg.normalization.clip_observations, env_cfg.normalization.clip_observations)
 
@@ -222,7 +223,7 @@ def run_mujoco(policy, cfg, env_cfg):
             hist_obs.popleft()
 
             policy_input = np.zeros([1, env_cfg.env.num_observations], dtype=np.float32)
-            print(policy_input.shape)
+            # print(policy_input.shape)
             for i in range(env_cfg.env.frame_stack):
                 policy_input[0, i * env_cfg.env.num_single_obs : (i + 1) * env_cfg.env.num_single_obs] = hist_obs[i][0, :]
             

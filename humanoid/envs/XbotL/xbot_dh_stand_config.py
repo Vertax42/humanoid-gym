@@ -204,6 +204,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
             0.2,
             0.25,
         ]  # increase push duration during training
+        
         max_push_vel_xy = 0.2
         max_push_ang_vel = 0.2
 
@@ -224,7 +225,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         torque_multiplier_range = [0.8, 1.2]
 
         randomize_link_mass = True
-        added_link_mass_range = [0.9, 1.2]
+        added_link_mass_range = [0.9, 1.1]
 
         randomize_motor_offset = True
         motor_offset_range = [-0.035, 0.035]  # Offset to add to the motor angles
@@ -245,7 +246,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
 
         randomize_joint_damping = True
         randomize_joint_damping_each_joint = False
-        joint_damping_range = [0.3, 1.5]
+        joint_damping_range = [5, 20]
         joint_1_damping_range = [0.3, 1.5]
         joint_2_damping_range = [0.3, 1.5]
         joint_3_damping_range = [0.3, 1.5]
@@ -259,7 +260,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
 
         randomize_joint_armature = True
         randomize_joint_armature_each_joint = False
-        joint_armature_range = [0.0001, 0.05]  # Factor
+        joint_armature_range = [0.0001, 0.05]  # 转动惯量Factor
         joint_1_armature_range = [0.0001, 0.05]
         joint_2_armature_range = [0.0001, 0.05]
         joint_3_armature_range = [0.0001, 0.05]
@@ -325,7 +326,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         class ranges:
             lin_vel_x = [-0.4, 1.2]  # min max [m/s]
             lin_vel_y = [-0.4, 0.4]  # min max [m/s]
-            ang_vel_yaw = [-0.4, 0.4]  # min max [rad/s]
+            ang_vel_yaw = [-0.6, 0.6]  # min max [rad/s]
             heading = [-3.14, 3.14]
 
     class rewards:
@@ -334,26 +335,26 @@ class XBotDHStandCfg(LeggedRobotCfg):
         soft_torque_limit = 0.9
         base_height_target = 0.89
         foot_min_dist = 0.2
-        foot_max_dist = 1.0
+        foot_max_dist = 0.5
 
-        # foot_ref_joints = [-0.34, -0.15, 0.25, 0.34, 0.15, -0.25]
+        # foot_ref_joints = [0.12, 0.16, 0.03, 0.12, 0.16, 0.03]
         # final_swing_joint_pos = final_swing_joint_delta_pos + default_pos
         final_swing_joint_delta_pos = [
             0.0,
             0.0,
             -0.21,
-            -0.30,
-            -0.05,
+            -0.36,
+            -0.10,
             0.0,
             0.0,
             0.0,
             0.21,
-            0.30,
-            0.05,
+            0.36,
+            0.10,
             0.0,
         ]
 
-        target_feet_height = 0.06
+        target_feet_height = 0.05
         target_feet_height_max = 0.07
         feet_to_ankle_distance = 0.05
         cycle_time = 0.64
@@ -361,7 +362,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         only_positive_rewards = True
         # tracking reward = exp(-error*sigma)
         tracking_sigma = 5
-        max_contact_force = 700  # forces above this value are penalized
+        max_contact_force = 650  # forces above this value are penalized
 
         class scales:
             ref_joint_pos = 2.2
@@ -369,7 +370,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
             feet_contact_number = 2.0
             # gait
             feet_air_time = 1.2
-            foot_slip = -0.1
+            foot_slip = -0.1 # -0.05
             feet_distance = 0.2
             knee_distance = 0.2
             # contact
@@ -382,7 +383,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
             track_vel_hard = 0.5
             # base pos
             default_joint_pos = 1.0
-            orientation = 1.0
+            orientation = 1.
             feet_rotation = 0.3
             base_height = 0.2
             base_acc = 0.2
@@ -457,10 +458,11 @@ class XBotDHStandCfgPPO(LeggedRobotCfgPPO):
 
         # logging
         save_interval = 100  # check for potential saves every this many iterations
-        experiment_name = "XBot_dh_stand"
+        experiment_name = "xbot_dh_stand"
         run_name = ""
         # load and resume
         resume = False
         load_run = -1  # -1 = last run
         checkpoint = -1  # -1 = last saved model
         resume_path = None  # updated from load_run and chkpt
+
