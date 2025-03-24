@@ -69,10 +69,14 @@ if joystick_use:
             # get joystick input
             pygame.event.get()
             # update robot command
-            x_vel_cmd = -joystick.get_axis(1) * 1
-            y_vel_cmd = -joystick.get_axis(0) * 1
-            yaw_vel_cmd = -joystick.get_axis(3) * 1
-            # print(x_vel_cmd, y_vel_cmd, yaw_vel_cmd)
+            x_vel_cmd += joystick.get_button(3) * 0.2
+            x_vel_cmd -= joystick.get_button(0) * 0.2
+            normal_vel = np.sqrt(x_vel_cmd**2 + y_vel_cmd**2 + yaw_vel_cmd**2)
+            if normal_vel <= 0.1:
+                x_vel_cmd = 0.0
+                y_vel_cmd = 0.0
+                yaw_vel_cmd = 0.0
+            
             pygame.time.delay(100)
 
     if joystick_opened and joystick_use:
@@ -158,6 +162,12 @@ def run_mujoco(policy, cfg, env_cfg):
 
     mujoco.mj_step(model, data)
     viewer = mujoco_viewer.MujocoViewer(model, data)
+    
+    viewer.vopt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True  # 显示接触点
+    viewer.vopt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True  # 显示接触力
+    viewer.vopt.flags[mujoco.mjtVisFlag.mjVIS_COM] = True  # 显示质心
+    viewer.vopt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = True  # 显示关节
+    
     target_q = np.zeros((env_cfg.env.num_actions), dtype=np.double)
     action = np.zeros((env_cfg.env.num_actions), dtype=np.double)
 
@@ -203,6 +213,7 @@ def run_mujoco(policy, cfg, env_cfg):
                 obs[0, 0] = x_vel_cmd * env_cfg.normalization.obs_scales.lin_vel
                 obs[0, 1] = y_vel_cmd * env_cfg.normalization.obs_scales.lin_vel
                 obs[0, 2] = yaw_vel_cmd * env_cfg.normalization.obs_scales.ang_vel
+            print(x_vel_cmd, y_vel_cmd, yaw_vel_cmd)
             obs[0, env_cfg.env.num_commands:env_cfg.env.num_commands+env_cfg.env.num_actions] = (q - cfg.robot_config.default_dof_pos) * env_cfg.normalization.obs_scales.dof_pos
             obs[0, env_cfg.env.num_commands+env_cfg.env.num_actions:env_cfg.env.num_commands+2*env_cfg.env.num_actions] = dq * env_cfg.normalization.obs_scales.dof_vel
             obs[0, env_cfg.env.num_commands+2*env_cfg.env.num_actions:env_cfg.env.num_commands+3*env_cfg.env.num_actions] = action

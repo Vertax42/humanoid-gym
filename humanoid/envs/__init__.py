@@ -33,13 +33,24 @@
 
 from humanoid import LEGGED_GYM_ROOT_DIR, LEGGED_GYM_ENVS_DIR
 from .base.legged_robot import LeggedRobot
-
+# old
 from .XbotL.xbot_dh_stand_config import XBotDHStandCfg, XBotDHStandCfgPPO
 
 from .XbotL.xbot_dh_stand_env import XBotDHStandEnv
 
+# new
+from .xbot.xbot_dh_stand_new_config import XBotDHStandCfg as XBotDHStandCfgNew
+
+from .xbot.xbot_dh_stand_new_env import XBotDHStandEnv as XBotDHStandEnvNew
+
+from .xbot.xbot_dh_stand_new_config import XBotDHStandCfgPPO as XBotDHStandCfgPPONEW
+
+# register
 from humanoid.utils.task_registry import task_registry
 
 task_registry.register(
     "xbot_dh_stand", XBotDHStandEnv, XBotDHStandCfg(), XBotDHStandCfgPPO()
+)
+task_registry.register(
+    "xbot_dh_stand_new", XBotDHStandEnvNew, XBotDHStandCfgNew(), XBotDHStandCfgPPONEW()
 )

@@ -39,7 +39,7 @@ from humanoid import LEGGED_GYM_ROOT_DIR
 
 # import isaacgym
 from humanoid.envs import *
-from humanoid.utils import get_args, export_policy_as_jit, task_registry, Logger
+from humanoid.utils import  get_args, export_policy_as_jit, task_registry, Logger
 from isaacgym.torch_utils import *
 
 import torch
@@ -67,41 +67,50 @@ if joystick_use:
 
     def handle_joystick_input():
         global exit_flag, x_vel_cmd, y_vel_cmd, yaw_vel_cmd, head_vel_cmd
-
+        
+        
         while not exit_flag:
             # get joystick input
             pygame.event.get()
             # update robot command
-            x_vel_cmd = -joystick.get_axis(1) * 1
-            y_vel_cmd = -joystick.get_axis(0) * 1
-            yaw_vel_cmd = -joystick.get_axis(3) * 1
+            # print all joystick axis and button
+            # print(joystick.get_button(0), joystick.get_button(1), joystick.get_button(2), joystick.get_button(3))
+            # x_vel_cmd = -joystick.get_axis(1) * 0.4
+            # y_vel_cmd = -joystick.get_axis(0) * 0.4
+            # yaw_vel_cmd = -joystick.get_axis(3) * 0.4
+            x_vel_cmd += joystick.get_button(3) * 0.2
+            x_vel_cmd -= joystick.get_button(0) * 0.2
+            normal_vel = np.sqrt(x_vel_cmd**2 + y_vel_cmd**2 + yaw_vel_cmd**2)
+            if normal_vel <= 0.1:
+                x_vel_cmd = 0.0
+                y_vel_cmd = 0.0
+                yaw_vel_cmd = 0.0
             pygame.time.delay(100)
 
     if joystick_opened and joystick_use:
         joystick_thread = Thread(target=handle_joystick_input)
         joystick_thread.start()
 
-
 def play(args):
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
     # override some parameters for testing
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 1)
     # env_cfg.terrain.mesh_type = 'trimesh'
-    env_cfg.terrain.mesh_type = "plane"
+    env_cfg.terrain.mesh_type = 'plane'
     env_cfg.terrain.num_rows = 5
     env_cfg.terrain.num_cols = 5
     env_cfg.terrain.max_init_terrain_level = 5
     env_cfg.env.episode_length_s = 1000
     env_cfg.noise.add_noise = False
-    env_cfg.domain_rand.randomize_friction = False
-    env_cfg.domain_rand.push_robots = False
-    env_cfg.domain_rand.continuous_push = False
-    env_cfg.domain_rand.randomize_base_mass = False
-    env_cfg.domain_rand.randomize_com = False
-    env_cfg.domain_rand.randomize_gains = False
-    env_cfg.domain_rand.randomize_torque = False
-    env_cfg.domain_rand.randomize_link_mass = False
-    env_cfg.domain_rand.randomize_motor_offset = False
+    env_cfg.domain_rand.randomize_friction = False 
+    env_cfg.domain_rand.push_robots = False 
+    env_cfg.domain_rand.continuous_push = False 
+    env_cfg.domain_rand.randomize_base_mass = False 
+    env_cfg.domain_rand.randomize_com = False 
+    env_cfg.domain_rand.randomize_gains = False 
+    env_cfg.domain_rand.randomize_torque = False 
+    env_cfg.domain_rand.randomize_link_mass = False 
+    env_cfg.domain_rand.randomize_motor_offset = False 
     env_cfg.domain_rand.randomize_joint_friction = False
     env_cfg.domain_rand.randomize_joint_damping = False
     env_cfg.domain_rand.randomize_joint_armature = False
@@ -118,82 +127,67 @@ def play(args):
 
     # load policy
     train_cfg.runner.resume = True
-    ppo_runner, train_cfg, _ = task_registry.make_alg_runner(
-        env=env, name=args.task, args=args, train_cfg=train_cfg
-    )
+    ppo_runner, train_cfg, _ = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
-
+    
     # export policy as a jit module (used to run it from C++)
-    current_date_str = datetime.now().strftime("%Y-%m-%d")
-    current_time_str = datetime.now().strftime("%H-%M-%S")
+    current_date_str = datetime.now().strftime('%Y-%m-%d')
+    current_time_str = datetime.now().strftime('%H-%M-%S')
     if EXPORT_POLICY:
-        path = os.path.join(
-            LEGGED_GYM_ROOT_DIR,
-            "logs",
-            train_cfg.runner.experiment_name,
-            "0_exported",
-            "policies",
-        )
+        path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, '0_exported', 'policies')
         export_policy_as_jit(ppo_runner.alg.actor_critic, path)
-        print("Exported policy as jit script to: ", path)
+        print('Exported policy as jit script to: ', path)
 
     logger = Logger(env_cfg.sim.dt * env_cfg.control.decimation)
-    robot_index = 0  # which robot is used for logging
-    joint_index = 5  # which joint is used for logging
-    stop_state_log = 1000  # number of steps before plotting states
+    robot_index = 0 # which robot is used for logging
+    joint_index = 5 # which joint is used for logging
+    stop_state_log = 1000 # number of steps before plotting states
     if RENDER:
         camera_properties = gymapi.CameraProperties()
         camera_properties.width = 1920
         camera_properties.height = 1080
         h1 = env.gym.create_camera_sensor(env.envs[0], camera_properties)
         camera_offset = gymapi.Vec3(1, -1, 0.5)
-        camera_rotation = gymapi.Quat.from_axis_angle(
-            gymapi.Vec3(-0.3, 0.2, 1), np.deg2rad(135)
-        )
+        camera_rotation = gymapi.Quat.from_axis_angle(gymapi.Vec3(-0.3, 0.2, 1),
+                                                    np.deg2rad(135))
         actor_handle = env.gym.get_actor_handle(env.envs[0], 0)
         body_handle = env.gym.get_actor_rigid_body_handle(env.envs[0], actor_handle, 0)
         env.gym.attach_camera_to_body(
-            h1,
-            env.envs[0],
-            body_handle,
+            h1, env.envs[0], body_handle,
             gymapi.Transform(camera_offset, camera_rotation),
-            gymapi.FOLLOW_POSITION,
-        )
+            gymapi.FOLLOW_POSITION)
 
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        video_dir = os.path.join(LEGGED_GYM_ROOT_DIR, "videos")
-        experiment_dir = os.path.join(
-            LEGGED_GYM_ROOT_DIR, "videos", train_cfg.runner.experiment_name
-        )
-        dir = os.path.join(
-            experiment_dir,
-            datetime.now().strftime("%b%d_%H-%M-%S") + args.run_name + ".mp4",
-        )
+        video_dir = os.path.join(LEGGED_GYM_ROOT_DIR, 'videos')
+        experiment_dir = os.path.join(LEGGED_GYM_ROOT_DIR, 'videos', train_cfg.runner.experiment_name)
+        dir = os.path.join(experiment_dir, datetime.now().strftime('%b%d_%H-%M-%S')+ args.run_name + '.mp4')
         if not os.path.exists(video_dir):
-            os.makedirs(video_dir, exist_ok=True)
+            os.makedirs(video_dir,exist_ok=True)
         if not os.path.exists(experiment_dir):
-            os.makedirs(experiment_dir, exist_ok=True)
+            os.makedirs(experiment_dir,exist_ok=True)
         video = cv2.VideoWriter(dir, fourcc, 50.0, (1920, 1080))
-
+    
     obs = env.get_observations()
 
-    np.set_printoptions(formatter={"float": "{:0.4f}".format})
-    for i in range(10 * stop_state_log):
-
-        actions = policy(obs.detach())  # * 0.
-
+    np.set_printoptions(formatter={'float': '{:0.4f}'.format})
+    for i in range(10*stop_state_log):
+        
+        actions = policy(obs.detach()) # * 0.
+        
         if FIX_COMMAND:
-            env.commands[:, 0] = 0.4  # 1.0
-            env.commands[:, 1] = 0.0
-            env.commands[:, 2] = 0.0
-            env.commands[:, 3] = 0.0
-
+            env.commands[:, 0] = 0.0   # 1.0
+            env.commands[:, 1] = 0
+            env.commands[:, 2] = 0
+            env.commands[:, 3] = 0.
+            print(env.commands)
+            
         else:
-            env.commands[:, 0] = x_vel_cmd  # 1.0
+            env.commands[:, 0] = x_vel_cmd
             env.commands[:, 1] = y_vel_cmd
             env.commands[:, 2] = yaw_vel_cmd
-            env.commands[:, 3] = 0.0
-
+            env.commands[:, 3] = 0.
+            print(env.commands)
+        
         obs, critic_obs, rews, dones, infos = env.step(actions.detach())
 
         if RENDER:
@@ -205,50 +199,47 @@ def play(args):
             img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             video.write(img[..., :3])
 
-        if i > stop_state_log * 0.2 and i < stop_state_log:
+        if i > stop_state_log*0.2 and i < stop_state_log:
             dict = {
-                "base_height": env.root_states[robot_index, 2].item(),
-                "foot_z_l": env.rigid_state[robot_index, 4, 2].item(),
-                "foot_z_r": env.rigid_state[robot_index, 9, 2].item(),
-                "foot_forcez_l": env.contact_forces[robot_index, 4, 2].item(),
-                "foot_forcez_r": env.contact_forces[robot_index, 9, 2].item(),
-                "base_vel_x": env.base_lin_vel[robot_index, 0].item(),
-                "command_x": x_vel_cmd,
-                "base_vel_y": env.base_lin_vel[robot_index, 1].item(),
-                "command_y": y_vel_cmd,
-                "base_vel_z": env.base_lin_vel[robot_index, 2].item(),
-                "base_vel_yaw": env.base_ang_vel[robot_index, 2].item(),
-                "command_yaw": yaw_vel_cmd,
-                "dof_pos_target": actions[robot_index, 0].item()
-                * env.cfg.control.action_scale,
-                "dof_pos": env.dof_pos[robot_index, 0].item(),
-                "dof_vel": env.dof_vel[robot_index, 0].item(),
-                "dof_torque": env.torques[robot_index, 0].item(),
-                "command_sin": obs[0, 0].item(),
-                "command_cos": obs[0, 1].item(),
-            }
+                    'base_height' : env.root_states[robot_index, 2].item(),
+                    'foot_z_l' : env.rigid_state[robot_index,4,2].item(),
+                    'foot_z_r' : env.rigid_state[robot_index,9,2].item(),
+                    'foot_forcez_l' : env.contact_forces[robot_index,4,2].item(),
+                    'foot_forcez_r' : env.contact_forces[robot_index,9,2].item(),
+                    'base_vel_x': env.base_lin_vel[robot_index, 0].item(),
+                    'command_x': x_vel_cmd,
+                    'base_vel_y':  env.base_lin_vel[robot_index, 1].item(),
+                    'command_y': y_vel_cmd,
+                    'base_vel_z':  env.base_lin_vel[robot_index, 2].item(),
+                    'base_vel_yaw':  env.base_ang_vel[robot_index, 2].item(),
+                    'command_yaw': yaw_vel_cmd,
+                    'dof_pos_target': actions[robot_index, 0].item() * env.cfg.control.action_scale,
+                    'dof_pos': env.dof_pos[robot_index, 0].item(),
+                    'dof_vel': env.dof_vel[robot_index, 0].item(),
+                    'dof_torque': env.torques[robot_index, 0].item(),
+                    'command_sin': obs[0,0].item(),
+                    'command_cos': obs[0,1].item(),
+                }
 
             # add dof_pos_target
             for i in range(env_cfg.env.num_actions):
-                dict[f"dof_pos_target[{i}]"] = (
-                    actions[robot_index, i].item() * env.cfg.control.action_scale,
-                )
+                dict[f'dof_pos_target[{i}]'] = actions[robot_index, i].item() * env.cfg.control.action_scale,
 
             # add dof_pos
             for i in range(env_cfg.env.num_actions):
-                dict[f"dof_pos[{i}]"] = (env.dof_pos[robot_index, i].item(),)
+                dict[f'dof_pos[{i}]'] = env.dof_pos[robot_index, i].item(),
 
             # add dof_torque
             for i in range(env_cfg.env.num_actions):
-                dict[f"dof_torque[{i}]"] = (env.torques[robot_index, i].item(),)
+                dict[f'dof_torque[{i}]'] = env.torques[robot_index, i].item(),
 
             # add dof_vel
             for i in range(env_cfg.env.num_actions):
-                dict[f"dof_vel[{i}]"] = (env.dof_vel[robot_index, i].item(),)
+                dict[f'dof_vel[{i}]'] = env.dof_vel[robot_index, i].item(),
 
             logger.log_states(dict=dict)
-
-        elif _ == stop_state_log:
+        
+        elif _== stop_state_log:
             logger.plot_states()
         elif i == stop_state_log:
             logger.plot_states()
@@ -256,16 +247,15 @@ def play(args):
         # ====================== Log states ======================
         if infos["episode"]:
             num_episodes = torch.sum(env.reset_buf).item()
-            if num_episodes > 0:
+            if num_episodes>0:
                 logger.log_rewards(infos["episode"], num_episodes)
 
     if RENDER:
         video.release()
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     EXPORT_POLICY = False
     RENDER = False
-    FIX_COMMAND = True
+    FIX_COMMAND = False
     args = get_args()
     play(args)

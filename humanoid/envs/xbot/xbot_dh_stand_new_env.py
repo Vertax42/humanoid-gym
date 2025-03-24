@@ -566,6 +566,10 @@ class XBotDHStandEnv(LeggedRobot):
         self.gait_start = torch.randint(0, 2, (self.num_envs,)).to(self.device)*0.5
 
 # ================================================ Rewards ================================================== #
+    def _reward_action_rate(self):
+        # Penalize changes in actions
+        return torch.sum(torch.square(self.last_actions - self.actions), dim=1)
+    
     def _reward_ref_joint_pos(self):
         """
         Calculates the reward based on the difference between the current joint positions and the target joint positions.
@@ -578,6 +582,19 @@ class XBotDHStandEnv(LeggedRobot):
         r = torch.exp(-2 * torch.norm(diff, dim=1)) - 0.2 * torch.norm(diff, dim=1).clamp(0, 0.5)
         r[stand_command] = 1.0
         return r
+    
+    def _reward_feet_air_time(self):
+        # Reward long steps
+        # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
+        contact = self.contact_forces[:, self.feet_indices, 2] > 1.
+        contact_filt = torch.logical_or(contact, self.last_contacts) 
+        self.last_contacts = contact
+        first_contact = (self.feet_air_time > 0.) * contact_filt
+        self.feet_air_time += self.dt
+        rew_airTime = torch.sum((self.feet_air_time - 0.5) * first_contact, dim=1) # reward only on first contact with the ground
+        rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
+        self.feet_air_time *= ~contact_filt
+        return rew_airTime
     
     def _reward_feet_distance(self):
         """
@@ -615,127 +632,6 @@ class XBotDHStandEnv(LeggedRobot):
         rew *= contact
         return torch.sum(rew, dim=1)
 
-    # def _reward_feet_air_time(self):
-    #     """
-    #     Calculates the reward for feet air time, promoting longer steps. This is achieved by
-    #     checking the first contact with the ground after being in the air. The air time is
-    #     limited to a maximum value for reward calculation.
-    #     """
-    #     contact = self.contact_forces[:, self.feet_indices, 2] > 5.
-    #     stance_mask = self._get_stance_mask().clone()
-    #     stance_mask[torch.norm(self.commands[:, :3], dim=1) < 0.05] = 1
-    #     self.contact_filt = torch.logical_or(torch.logical_or(contact, stance_mask), self.last_contacts)
-    #     self.last_contacts = contact
-    #     first_contact = (self.feet_air_time > 0.) * self.contact_filt
-    #     self.feet_air_time += self.dt
-    #     air_time = self.feet_air_time.clamp(0, 0.5) * first_contact
-    #     self.feet_air_time *= ~self.contact_filt
-    #     return air_time.sum(dim=1)
-
-    def _reward_feet_air_time_biped(self):
-        """
-        奖励双足机器人采取较长的步伐，同时确保单脚支撑。
-        
-        此函数奖励：
-        1. 单脚支撑状态（一只脚接触地面，另一只脚在空中）
-        2. 每只脚在其当前状态（接触或空中）维持较长时间
-        3. 当命令速度足够大时才给予奖励
-        
-        返回:
-            torch.Tensor: 每个环境的奖励值
-        """
-        # 检测两只脚的接触状态
-        left_foot_index = self.feet_indices[0] 
-        right_foot_index = self.feet_indices[1]
-        
-        left_contact = self.contact_forces[:, left_foot_index, 2] > 5.0
-        right_contact = self.contact_forces[:, right_foot_index, 2] > 5.0
-        
-        # 初始化跟踪变量（如果尚未初始化）
-        if not hasattr(self, 'left_foot_contact_time'):
-            self.left_foot_contact_time = torch.zeros(self.num_envs, device=self.device)
-            self.right_foot_contact_time = torch.zeros(self.num_envs, device=self.device)
-            self.left_foot_air_time = torch.zeros(self.num_envs, device=self.device)
-            self.right_foot_air_time = torch.zeros(self.num_envs, device=self.device)
-        
-        # 更新接触和空中时间
-        self.left_foot_contact_time = torch.where(
-            left_contact, 
-            self.left_foot_contact_time + self.dt, 
-            torch.zeros_like(self.left_foot_contact_time)
-        )
-        
-        self.right_foot_contact_time = torch.where(
-            right_contact, 
-            self.right_foot_contact_time + self.dt, 
-            torch.zeros_like(self.right_foot_contact_time)
-        )
-        
-        self.left_foot_air_time = torch.where(
-            ~left_contact, 
-            self.left_foot_air_time + self.dt, 
-            torch.zeros_like(self.left_foot_air_time)
-        )
-        
-        self.right_foot_air_time = torch.where(
-            ~right_contact, 
-            self.right_foot_air_time + self.dt, 
-            torch.zeros_like(self.right_foot_air_time)
-        )
-        
-        # 获取每只脚在当前状态的时间
-        left_mode_time = torch.where(left_contact, self.left_foot_contact_time, self.left_foot_air_time)
-        right_mode_time = torch.where(right_contact, self.right_foot_contact_time, self.right_foot_air_time)
-        
-        # 检测单脚支撑状态
-        left_stance = left_contact & ~right_contact  # 左脚支撑
-        right_stance = right_contact & ~left_contact  # 右脚支撑
-        single_stance = left_stance | right_stance    # 单脚支撑（左或右）
-        
-        # 计算奖励
-        reward = torch.zeros(self.num_envs, device=self.device)
-        
-        # 在单脚支撑情况下:
-        # 1. 对于支撑脚，奖励其接触时间
-        # 2. 对于摆动脚，奖励其空中时间
-        # 3. 取两者中的最小值作为总奖励
-        
-        # 左脚支撑情况
-        left_stance_reward = torch.where(
-            left_stance,
-            torch.min(self.left_foot_contact_time, self.right_foot_air_time),
-            torch.zeros_like(reward)
-        )
-        
-        # 右脚支撑情况
-        right_stance_reward = torch.where(
-            right_stance,
-            torch.min(self.right_foot_contact_time, self.left_foot_air_time),
-            torch.zeros_like(reward)
-        )
-        
-        # 合并两种单脚支撑的奖励
-        stance_reward = left_stance_reward + right_stance_reward
-        
-        # 限制最大奖励值
-        max_reward_time = 0.5  # 可根据需要调整
-        reward = torch.clamp(stance_reward, max=max_reward_time)
-        
-        # 当速度命令足够大时才给予奖励
-        command_speed = torch.norm(self.commands[:, :2], dim=1)
-        has_command = command_speed > 0.05  # 速度阈值可调整
-        
-        # 应用命令条件
-        reward = reward * has_command
-        
-        # 可选：添加调试信息（在开发时有用）
-        if self.debug_viz and hasattr(self, 'debug_step_counter') and self.debug_step_counter % 100 == 0:
-            print(f"L_contact: {left_contact[0].item()}, R_contact: {right_contact[0].item()}")
-            print(f"L_contact_time: {self.left_foot_contact_time[0].item():.3f}, R_contact_time: {self.right_foot_contact_time[0].item():.3f}")
-            print(f"L_air_time: {self.left_foot_air_time[0].item():.3f}, R_air_time: {self.right_foot_air_time[0].item():.3f}")
-            print(f"Single stance: {single_stance[0].item()}, Reward: {reward[0].item():.3f}")
-        
-        return reward
 
     def _reward_feet_contact_number(self):
         """
@@ -749,13 +645,8 @@ class XBotDHStandEnv(LeggedRobot):
         return torch.mean(reward, dim=1)
 
     def _reward_orientation(self):
-        """
-        Calculates the reward for maintaining a flat base orientation. It penalizes deviation 
-        from the desired base orientation using the base euler angles and the projected gravity vector.
-        """
-        quat_mismatch = torch.exp(-torch.sum(torch.abs(self.base_euler_xyz[:, :2]), dim=1) * 10)
-        orientation = torch.exp(-torch.norm(self.projected_gravity[:, :2], dim=1) * 20)
-        return (quat_mismatch + orientation) / 2.
+        # Penalize non flat base orientation
+        return torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
 
     def _reward_feet_contact_forces(self):
         """
@@ -777,16 +668,9 @@ class XBotDHStandEnv(LeggedRobot):
         return torch.exp(-yaw_roll * 100) - 0.01 * torch.norm(joint_diff, dim=1)
 
     def _reward_base_height(self):
-        """
-        Calculates the reward based on the robot's base height. Penalizes deviation from a target base height.
-        The reward is computed based on the height difference between the robot's base and the average height 
-        of its feet when they are in contact with the ground.
-        """
-        stance_mask = self._get_stance_mask()
-        measured_heights = torch.sum(
-            self.rigid_state[:, self.feet_indices, 2] * stance_mask, dim=1) / torch.sum(stance_mask, dim=1)
-        base_height = self.root_states[:, 2] - (measured_heights - self.cfg.rewards.feet_to_ankle_distance)
-        return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target) * 100)
+        # Penalize base height away from target
+        base_height = self.root_states[:, 2]
+        return torch.square(base_height - self.cfg.rewards.base_height_target)
 
     def _reward_base_acc(self):
         """
@@ -796,38 +680,6 @@ class XBotDHStandEnv(LeggedRobot):
         root_acc = self.last_root_vel - self.root_states[:, 7:13]
         rew = torch.exp(-torch.norm(root_acc, dim=1) * 3)
         return rew
-
-
-    def _reward_vel_mismatch_exp(self):
-        """
-        Computes a reward based on the mismatch in the robot's linear and angular velocities. 
-        Encourages the robot to maintain a stable velocity by penalizing large deviations.
-        """
-        lin_mismatch = torch.exp(-torch.square(self.base_lin_vel[:, 2]) * 10)
-        ang_mismatch = torch.exp(-torch.norm(self.base_ang_vel[:, :2], dim=1) * 5.)
-
-        c_update = (lin_mismatch + ang_mismatch) / 2.
-
-        return c_update
-
-    def _reward_track_vel_hard(self):
-        """
-        Calculates a reward for accurately tracking both linear and angular velocity commands.
-        Penalizes deviations from specified linear and angular velocity targets.
-        """
-        # Tracking of linear velocity commands (xy axes)
-        lin_vel_error = torch.norm(
-            self.commands[:, :2] - self.base_lin_vel[:, :2], dim=1)
-        lin_vel_error_exp = torch.exp(-lin_vel_error * 10)
-
-        # Tracking of angular velocity commands (yaw)
-        ang_vel_error = torch.abs(
-            self.commands[:, 2] - self.base_ang_vel[:, 2])
-        ang_vel_error_exp = torch.exp(-ang_vel_error * 10)
-
-        linear_error = 0.2 * (lin_vel_error + ang_vel_error)
-        r = (lin_vel_error_exp + ang_vel_error_exp) / 2. - linear_error
-        return r
     
     def _reward_tracking_lin_vel(self):
         """
@@ -837,10 +689,8 @@ class XBotDHStandEnv(LeggedRobot):
         stand_command = (torch.norm(self.commands[:, :3], dim=1) <= self.cfg.commands.stand_com_threshold)
         lin_vel_error_square = torch.sum(torch.square(
             self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
-        lin_vel_error_abs = torch.sum(torch.abs(
-            self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
-        r_square = torch.exp(-lin_vel_error_square * self.cfg.rewards.tracking_sigma)
-        r_abs = torch.exp(-lin_vel_error_abs * self.cfg.rewards.tracking_sigma * 2)
+        r_square = torch.exp(-lin_vel_error_square / self.cfg.rewards.tracking_sigma)
+        r_abs = torch.exp(-lin_vel_error_square / self.cfg.rewards.tracking_sigma * 2)
         r = torch.where(stand_command, r_abs, r_square)
 
         return r
@@ -853,13 +703,23 @@ class XBotDHStandEnv(LeggedRobot):
         stand_command = (torch.norm(self.commands[:, :3], dim=1) <= self.cfg.commands.stand_com_threshold)
         ang_vel_error_square = torch.square(
             self.commands[:, 2] - self.base_ang_vel[:, 2])
-        ang_vel_error_abs = torch.abs(
-            self.commands[:, 2] - self.base_ang_vel[:, 2])
-        r_square = torch.exp(-ang_vel_error_square * self.cfg.rewards.tracking_sigma)
-        r_abs = torch.exp(-ang_vel_error_abs * self.cfg.rewards.tracking_sigma * 2)
+        r_square = torch.exp(-ang_vel_error_square / self.cfg.rewards.tracking_sigma)
+        r_abs = torch.exp(-ang_vel_error_square / self.cfg.rewards.tracking_sigma * 2)
         r = torch.where(stand_command, r_abs, r_square)
 
         return r 
+    
+    def _reward_alive(self):
+        # Reward for staying alive
+        return 1.0
+
+    def _reward_lin_vel_z(self):
+        # Penalize z axis base linear velocity
+        return torch.square(self.base_lin_vel[:, 2])
+
+    def _reward_ang_vel_xy(self):
+        # Penalize xy axes base angular velocity
+        return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
     
     def _reward_feet_clearance(self):
         """
@@ -884,45 +744,6 @@ class XBotDHStandEnv(LeggedRobot):
         self.feet_height *= ~contact
         return rew_pos
 
-    def _reward_low_speed(self):
-        """
-        Rewards or penalizes the robot based on its speed relative to the commanded speed. 
-        This function checks if the robot is moving too slow, too fast, or at the desired speed, 
-        and if the movement direction matches the command.
-        """
-        # Calculate the absolute value of speed and command for comparison
-        absolute_speed = torch.abs(self.base_lin_vel[:, 0])
-        absolute_command = torch.abs(self.commands[:, 0])
-
-        # Define speed criteria for desired range
-        speed_too_low = absolute_speed < 0.5 * absolute_command
-        speed_too_high = absolute_speed > 1.2 * absolute_command
-        speed_desired = ~(speed_too_low | speed_too_high)
-
-        # Check if the speed and command directions are mismatched
-        sign_mismatch = torch.sign(
-            self.base_lin_vel[:, 0]) != torch.sign(self.commands[:, 0])
-
-        # Initialize reward tensor
-        reward = torch.zeros_like(self.base_lin_vel[:, 0])
-
-        # Assign rewards based on conditions
-        # Speed too low
-        reward[speed_too_low] = -1.0
-        # Speed too high
-        reward[speed_too_high] = 0.
-        # Speed within desired range
-        reward[speed_desired] = 1.2
-        # Sign mismatch has the highest priority
-        reward[sign_mismatch] = -2.0
-        return reward * (self.commands[:, 0].abs() > 0.05)
-    
-    def _reward_torques(self):
-        """
-        Penalizes the use of high torques in the robot's joints. Encourages efficient movement by minimizing
-        the necessary force exerted by the motors.
-        """
-        return torch.sum(torch.square(self.torques), dim=1)
     
     def _reward_ankle_torques(self):
         """
@@ -940,17 +761,11 @@ class XBotDHStandEnv(LeggedRobot):
         return r
 
     def _reward_dof_vel(self):
-        """
-        Penalizes high velocities at the degrees of freedom (DOF) of the robot. This encourages smoother and 
-        more controlled movements.
-        """
+        # Penalize dof velocities
         return torch.sum(torch.square(self.dof_vel), dim=1)
     
     def _reward_dof_acc(self):
-        """
-        Penalizes high accelerations at the robot's degrees of freedom (DOF). This is important for ensuring
-        smooth and stable motion, reducing wear on the robot's mechanical parts.
-        """
+        # Penalize dof accelerations
         return torch.sum(torch.square((self.last_dof_vel - self.dof_vel) / self.dt), dim=1)
     
     def _reward_collision(self):
@@ -983,6 +798,38 @@ class XBotDHStandEnv(LeggedRobot):
         r = torch.where(stand_command, r.clone(),
                         torch.zeros_like(r))
         return r
+    
+    def _reward_contact(self):
+        offset = 0.5
+        res = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+        phase = self._get_phase()
+        phase_left = phase
+        phase_right = (phase + offset) % 1
+        
+        leg_phase = torch.cat([phase_left.unsqueeze(1), phase_right.unsqueeze(1)], dim=-1)
+        for i in range(2):
+            is_stance = leg_phase[:, i] < 0.55
+            contact = self.contact_forces[:, self.feet_indices[i], 2] > 1
+            res += ~(contact ^ is_stance)
+        return res
+    
+    def _reward_contact_no_vel(self):
+        # Penalize contact with no velocity
+        contact = torch.norm(self.contact_forces[:, self.feet_indices, :3], dim=2) > 5.
+        foot_speed_norm = self.rigid_state[:, self.feet_indices, 7:10] * contact.unsqueeze(-1)
+        penalize = torch.square(foot_speed_norm[:, :, :3])
+        return torch.sum(penalize, dim=(1,2))
+    
+    def _reward_feet_swing_height(self):
+        contact = torch.norm(self.contact_forces[:, self.feet_indices, :3], dim=2) > 5. 
+        # rigid_body_states_view = self.rigid_body_states.view(self.num_envs, -1, 13)
+        # feet_state = rigid_body_states_view[:, self.feet_indices, :]
+        feet_pos = self.rigid_state[:, self.feet_indices, :3]
+        pos_error = torch.square(feet_pos[:, :, 2] - 0.06) * ~contact
+        return torch.sum(pos_error, dim=(1))
+    
+    def _reward_hip_pos(self):
+        return torch.sum(torch.square(self.dof_pos[:,[0,2,6,8]]), dim=1) # left_leg_roll_joint, left_leg_yaw_joint, right_leg_roll_joint, right_leg_yaw_joint
     
     def _reward_feet_stumble(self):
         # Penalize feet hitting vertical surfaces

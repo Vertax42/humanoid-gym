@@ -128,7 +128,7 @@ class XBotDHStandCfg(LeggedRobotCfg):
         pos = [0.0, 0.0, 0.95]
         
         default_joint_angles = {  # = target angles [rad] when action = 0.0
-            'left_leg_roll_joint': 0.,
+            'left_leg_roll_joint': 0., #[0, 2, 6, 8]
             'left_leg_yaw_joint': 0.,
             'left_leg_pitch_joint': 0.,
             'left_knee_joint': 0.,
@@ -327,8 +327,9 @@ class XBotDHStandCfg(LeggedRobotCfg):
             ang_vel_yaw = [-0.3, 0.3]  # min max [rad/s]
             heading = [-3.14, 3.14]
 
-    class rewards:    
-        soft_dof_pos_limit = 0.98
+    class rewards:
+        
+        soft_dof_pos_limit = 0.9
         soft_dof_vel_limit = 0.9
         soft_torque_limit = 0.9
         base_height_target = 0.89
@@ -340,14 +341,14 @@ class XBotDHStandCfg(LeggedRobotCfg):
         final_swing_joint_delta_pos = [
             0.0,
             0.0,
-            -0.12,
-            -0.22,
+            -0.21,
+            -0.36,
             -0.10,
             0.0,
             0.0,
             0.0,
-            0.12,
-            0.22,
+            0.21,
+            0.36,
             0.10,
             0.0,
         ]
@@ -358,47 +359,30 @@ class XBotDHStandCfg(LeggedRobotCfg):
         # if true negative total rewards are clipped at zero (avoids early termination problems)
         only_positive_rewards = True
         # tracking reward = exp(-error*sigma)
-        tracking_sigma = 5
+        tracking_sigma = 0.25
         max_contact_force = 700  # forces above this value are penalized
 
         class scales:
-            ref_joint_pos = 1.6
-            feet_clearance = 1.0
-            feet_contact_number = 1.2
-            # gait
-            # feet_air_time = 1.
-            feet_air_time_biped = 1.0
-            foot_slip = -0.05 # -0.05
-            feet_distance = 0.2
-            knee_distance = 0.2
-            # contact
-            feet_contact_forces = -0.01
-            # vel tracking
-            tracking_lin_vel = 1.2
-            tracking_ang_vel = 1.1
-            vel_mismatch_exp = 0.5  # lin_z; ang x,y
-            low_speed = 0.2
-            track_vel_hard = 0.5
-            # base pos
-            default_joint_pos = 0.5
-            orientation = 1.
-            feet_rotation = 0.2
-            base_height = 0.2
-            base_acc = 0.2
-            # energy
-            action_smoothness = -0.002
-        
-            torques = -1e-5
-            dof_vel = -5e-4
-            dof_acc = -1e-7
+            # action_rate
             
-            collision = -1.0
+            tracking_lin_vel = 1.0
+            tracking_ang_vel = 0.5
+            lin_vel_z = -2.0
+            ang_vel_xy = -0.05
+            alive = 0.15
+            orientation = -1.0
+            base_height = -10.0
             
-            stand_still = 1.5
-            # limits
-            dof_vel_limits = -1
-            dof_pos_limits = -10.0
-            dof_torque_limits = -0.1
+            dof_acc = -2.5e-7
+            dof_vel = -1e-3
+            feet_air_time = 0.0
+            collision = 0.0
+            action_rate = -0.01
+            dof_pos_limits = -5.0
+            hip_pos = -1.0
+            contact_no_vel = -0.2
+            feet_swing_height = -20.0
+            contact = 0.18
 
     class normalization:
         class obs_scales:
